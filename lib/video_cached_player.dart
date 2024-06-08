@@ -50,6 +50,7 @@ class CachedVideoPlayerValue extends VideoPlayerValue {
     this.playbackSpeed = 1.0,
     this.rotationCorrection = 0,
     this.errorDescription,
+    this.isCompleted = false,
   }) : super(
           duration: duration,
           size: size,
@@ -124,6 +125,12 @@ class CachedVideoPlayerValue extends VideoPlayerValue {
   /// If [hasError] is false this is `null`.
   final String? errorDescription;
 
+  /// True if video has finished playing to end.
+  ///
+  /// Reverts to false if video position changes, or video begins playing.
+  /// Does not update if video is looping.
+  final bool isCompleted;
+
   /// The [size] of the currently loaded video.
   final Size size;
 
@@ -172,6 +179,7 @@ class CachedVideoPlayerValue extends VideoPlayerValue {
     double? playbackSpeed,
     int? rotationCorrection,
     String? errorDescription = _defaultErrorDescription,
+    bool? isCompleted,
   }) {
     return CachedVideoPlayerValue(
       duration: duration ?? this.duration,
@@ -190,6 +198,7 @@ class CachedVideoPlayerValue extends VideoPlayerValue {
       errorDescription: errorDescription != _defaultErrorDescription
           ? errorDescription
           : this.errorDescription,
+      isCompleted: isCompleted ?? this.isCompleted,
     );
   }
 
@@ -208,7 +217,8 @@ class CachedVideoPlayerValue extends VideoPlayerValue {
         'isBuffering: $isBuffering, '
         'volume: $volume, '
         'playbackSpeed: $playbackSpeed, '
-        'errorDescription: $errorDescription)';
+        'errorDescription: $errorDescription, '
+        'isCompleted: $isCompleted),';
   }
 }
 
@@ -394,6 +404,7 @@ class CachedVideoPlayerController
             rotationCorrection: event.rotationCorrection,
             isInitialized: event.duration != null,
             errorDescription: null,
+            isCompleted: false,
           );
           initializingCompleter.complete(null);
           _applyLooping();
@@ -406,6 +417,8 @@ class CachedVideoPlayerController
           // we use pause() and seekTo() to ensure the platform stops playing
           // and seeks to the last frame of the video.
           pause().then((void pauseResult) => seekTo(value.duration));
+          value = value.copyWith(isCompleted: true);
+
           break;
         case VideoEventType.bufferingUpdate:
           value = value.copyWith(buffered: event.buffered);
@@ -415,6 +428,14 @@ class CachedVideoPlayerController
           break;
         case VideoEventType.bufferingEnd:
           value = value.copyWith(isBuffering: false);
+          break;
+        case VideoEventType.isPlayingStateUpdate:
+          if (event.isPlaying ?? false) {
+            value =
+                value.copyWith(isPlaying: event.isPlaying, isCompleted: false);
+          } else {
+            value = value.copyWith(isPlaying: event.isPlaying);
+          }
           break;
         case VideoEventType.unknown:
           break;
@@ -687,6 +708,7 @@ class CachedVideoPlayerController
     value = value.copyWith(
       position: position,
       caption: _getCaptionAt(position),
+      isCompleted: position == value.duration,
     );
   }
 
